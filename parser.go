@@ -15,16 +15,16 @@ import (
 type Result struct {
 	Position    int
 	Name        string
-	Time        string
+	Time        string // Raw time string
+	TimeSeconds int    // Parsed time in seconds
 	AgeGrade    string
 	AgeCategory string
 	Note        string
 	TotalRuns   int
-	EventID     int
+	EventID     int64
 }
 
 type Event struct {
-	ID          int
 	EventNumber int
 	LocationID  int
 	Date        time.Time
@@ -32,9 +32,9 @@ type Event struct {
 }
 
 type Location struct {
-	ID      int
-	Slug    string
-	Name    string
+	ID   int
+	Slug string
+	Name string
 	// ISO 3166-1 alpha-3 country code
 	Country string
 }
@@ -55,7 +55,7 @@ func ParseResults(urlSlug string, eventNumber int) (Event, []Result, error) {
 	return scrapeEvent(url, eventNumber)
 }
 
-func scrapeEvent(url string, eventID int) (Event, []Result, error) {
+func scrapeEvent(url string, eventNumber int) (Event, []Result, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -91,12 +91,11 @@ func scrapeEvent(url string, eventID int) (Event, []Result, error) {
 
 	eventDate, err := parseEventDate(dateText)
 	if err != nil {
-		log.Printf("Warning: Could not parse date for event %d: %v", eventID, err)
+		log.Printf("Warning: Could not parse date for event %d: %v", eventNumber, err)
 	}
 
 	event := Event{
-		ID:          eventID,
-		EventNumber: eventID,
+		EventNumber: eventNumber,
 		Date:        eventDate,
 		URL:         url,
 	}
@@ -107,7 +106,6 @@ func scrapeEvent(url string, eventID int) (Event, []Result, error) {
 
 	// Find all result rows using the correct class
 	resultRows := doc.Find(".Results-table-row")
-	log.Printf("Found %d result rows", resultRows.Length())
 
 	resultRows.Each(func(i int, s *goquery.Selection) {
 		// Get data attributes
@@ -130,22 +128,29 @@ func scrapeEvent(url string, eventID int) (Event, []Result, error) {
 		ageGrade := s.AttrOr("data-agegrade", "")
 		achievement := s.AttrOr("data-achievement", "")
 
-		if position > 0 { // Valid row
-			result := Result{
-				Position:    position,
-				Name:        name,
-				Time:        strings.TrimSpace(timeCell),
-				AgeGrade:    ageGrade,
-				AgeCategory: ageGroup,
-				Note:        achievement,
-				TotalRuns:   totalRuns,
-				EventID:     eventID,
+		time := strings.TrimSpace(timeCell)
+		timeSeconds := 0
+		if name != "Unknown" {
+			timeSeconds, err = timeToSeconds(time)
+			if err != nil {
+				log.Printf("Warning: Could not parse time for position %d: %v", position, err)
+				skippedRows++
+				return
 			}
-			results = append(results, result)
-			processedRows++
-		} else {
-			skippedRows++
 		}
+		result := Result{
+			Position:    position,
+			Name:        name,
+			Time:        time,
+			TimeSeconds: timeSeconds,
+			AgeGrade:    ageGrade,
+			AgeCategory: ageGroup,
+			Note:        achievement,
+			TotalRuns:   totalRuns,
+		}
+		results = append(results, result)
+		processedRows++
+
 	})
 
 	log.Printf("Processed %d rows, skipped %d invalid rows", processedRows, skippedRows)
@@ -157,12 +162,9 @@ func parseEventDate(dateText string) (time.Time, error) {
 
 	// Try different date formats
 	formats := []string{
-		"1/2/06",     // M/D/YY
-		"2/1/06",     // D/M/YY
-		"1/2/2006",   // M/D/YYYY
-		"2/1/2006",   // D/M/YYYY
 		"02/01/2006", // DD/MM/YYYY
-		"01/02/2006", // MM/DD/YYYY
+		"2/1/06",     // D/M/YY
+		"2/1/2006",   // D/M/YYYY
 	}
 
 	var lastErr error
@@ -177,4 +179,41 @@ func parseEventDate(dateText string) (time.Time, error) {
 	// If we get here, none of the formats worked
 	log.Printf("Failed to parse date '%s' with any known format", dateText)
 	return time.Time{}, lastErr
+}
+
+// timeToSeconds converts a time string (MM:SS or HH:MM:SS) to total seconds
+func timeToSeconds(timeStr string) (int, error) {
+	if timeStr == "" || timeStr == "Unknown" {
+		return 0, nil;
+	}
+
+	parts := strings.Split(timeStr, ":")
+	if len(parts) == 2 {
+		// MM:SS format
+		minutes, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, fmt.Errorf("invalid minutes: %v", err)
+		}
+		seconds, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return 0, fmt.Errorf("invalid seconds: %v", err)
+		}
+		return minutes*60 + seconds, nil
+	} else if len(parts) == 3 {
+		// HH:MM:SS format
+		hours, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, fmt.Errorf("invalid hours: %v", err)
+		}
+		minutes, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return 0, fmt.Errorf("invalid minutes: %v", err)
+		}
+		seconds, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return 0, fmt.Errorf("invalid seconds: %v", err)
+		}
+		return hours*3600 + minutes*60 + seconds, nil
+	}
+	return 0, fmt.Errorf("invalid time format")
 }
