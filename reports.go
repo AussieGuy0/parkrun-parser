@@ -24,22 +24,6 @@ type TimeStats struct {
 	Count    int
 }
 
-// parseDateTime parses a date string that might be in different timezone formats
-func parseDateTime(dateStr string) (time.Time, error) {
-	// Try first format with offset
-	t, err := time.Parse("2006-01-02 15:04:05-07:00", dateStr)
-	if err == nil {
-		return t, nil
-	}
-
-	// Try second format with UTC
-	t, err = time.Parse("2006-01-02 15:04:05+00:00", dateStr)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("error parsing date '%s': %v", dateStr, err)
-	}
-	return t, nil
-}
-
 // GetTopParticipants returns the runners with the most parkruns at a location
 func GetTopParticipants(db *sql.DB, locationID int, limit int) ([]RunnerStat, error) {
 	query := `
@@ -389,4 +373,165 @@ func secondsToTime(seconds int) string {
 		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, secs)
 	}
 	return fmt.Sprintf("%d:%02d", minutes, secs)
+}
+
+// parseDateTime parses a date string that might be in different timezone formats
+func parseDateTime(dateStr string) (time.Time, error) {
+	// Try first format with offset
+	t, err := time.Parse("2006-01-02 15:04:05-07:00", dateStr)
+	if err == nil {
+		return t, nil
+	}
+
+	// Try second format with UTC
+	t, err = time.Parse("2006-01-02 15:04:05+00:00", dateStr)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error parsing date '%s': %v", dateStr, err)
+	}
+	return t, nil
+}
+
+// PrintComparisonReport prints a comparison between two parkrun locations
+func PrintComparisonReport(db *sql.DB, location1, location2 string) error {
+	// Get stats for both locations
+	stats1, err := getLocationStats(db, location1)
+	if err != nil {
+		return err
+	}
+	stats2, err := getLocationStats(db, location2)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("\n=== Comparison: %s | %s ===\n\n", location1, location2)
+
+	// Compare basic stats in table format
+	fmt.Printf("Total Events:       %6d | %6d\n",
+		stats1["total_events"], stats2["total_events"])
+	fmt.Printf("Total Runners:      %6d | %6d\n",
+		stats1["total_runners"], stats2["total_runners"])
+	fmt.Printf("Avg Participants:   %6.1f | %6.1f\n",
+		stats1["avg_participants"], stats2["avg_participants"])
+	fmt.Printf("Biggest Event:      %6d | %6d runners\n",
+		stats1["biggest_event_count"], stats2["biggest_event_count"])
+
+	// Compare median times
+	times1, err := GetMedianTimesByAgeCategory(db, stats1["location_id"].(int))
+	if err != nil {
+		return err
+	}
+	times2, err := GetMedianTimesByAgeCategory(db, stats2["location_id"].(int))
+	if err != nil {
+		return err
+	}
+
+	// Create maps for easy lookup
+	medians1 := make(map[string]TimeStats)
+	for _, t := range times1 {
+		medians1[t.Category] = t
+	}
+	medians2 := make(map[string]TimeStats)
+	for _, t := range times2 {
+		medians2[t.Category] = t
+	}
+
+	// Find all unique categories
+	categories := make(map[string]bool)
+	for _, t := range times1 {
+		categories[t.Category] = true
+	}
+	for _, t := range times2 {
+		categories[t.Category] = true
+	}
+
+	// Group categories
+	juniors := make([]string, 0)
+	males := make([]string, 0)
+	females := make([]string, 0)
+	others := make([]string, 0)
+
+	for cat := range categories {
+		prefix := cat[:2]
+		switch {
+		case prefix == "JM" || prefix == "JW":
+			juniors = append(juniors, cat)
+		case prefix == "SM" || prefix == "VM":
+			males = append(males, cat)
+		case prefix == "SW" || prefix == "VW":
+			females = append(females, cat)
+		default:
+			others = append(others, cat)
+		}
+	}
+
+	// Sort each group
+	sort.Strings(juniors)
+	sort.Strings(males)
+	sort.Strings(females)
+	sort.Strings(others)
+
+	// Print median time comparisons
+	fmt.Printf("\n=== Median Times by Category ===\n")
+
+	if len(juniors) > 0 {
+		fmt.Printf("\nJuniors:\n")
+		printCategoryComparisons(juniors, medians1, medians2)
+	}
+
+	if len(males) > 0 {
+		fmt.Printf("\nMales:\n")
+		printCategoryComparisons(males, medians1, medians2)
+	}
+
+	if len(females) > 0 {
+		fmt.Printf("\nFemales:\n")
+		printCategoryComparisons(females, medians1, medians2)
+	}
+
+	if len(others) > 0 {
+		fmt.Printf("\nOthers:\n")
+		printCategoryComparisons(others, medians1, medians2)
+	}
+
+	return nil
+}
+
+func printCategoryComparisons(categories []string, medians1, medians2 map[string]TimeStats) {
+	for _, cat := range categories {
+		t1, ok1 := medians1[cat]
+		t2, ok2 := medians2[cat]
+
+		if ok1 && ok2 {
+			fmt.Printf("%-8s:   %8s | %8s\n",
+				cat, t1.Median, t2.Median)
+		} else if ok1 {
+			fmt.Printf("%-8s:   %8s | %8s\n",
+				cat, t1.Median, "N/A")
+		} else {
+			fmt.Printf("%-8s:   %8s | %8s\n",
+				cat, "N/A", t2.Median)
+		}
+	}
+}
+
+// Helper function to get location stats with ID included
+func getLocationStats(db *sql.DB, locationSlug string) (map[string]interface{}, error) {
+	// Get location ID
+	var locationID int
+	err := db.QueryRow(`SELECT id FROM locations WHERE slug = ?`, locationSlug).Scan(&locationID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("location '%s' not found", locationSlug)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("database error: %v", err)
+	}
+
+	stats, err := GetLocationStats(db, locationID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add location ID to stats
+	stats["location_id"] = locationID
+	return stats, nil
 }

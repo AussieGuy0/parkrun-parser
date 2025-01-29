@@ -47,8 +47,8 @@ func main() {
 			printUsage()
 			os.Exit(1)
 		}
-		urlSlug := os.Args[2]
 
+		urlSlug := os.Args[2]
 		db, err := sql.Open("sqlite3", "./parkrun.db")
 		if err != nil {
 			log.Fatal("Failed to connect to database:", err)
@@ -62,6 +62,27 @@ func main() {
 			log.Fatal(err)
 		}
 
+	case "compare":
+		if len(os.Args) != 4 {
+			printUsage()
+			os.Exit(1)
+		}
+
+		location1 := os.Args[2]
+		location2 := os.Args[3]
+
+		db, err := sql.Open("sqlite3", "./parkrun.db")
+		if err != nil {
+			log.Fatal("Failed to connect to database:", err)
+		}
+		defer db.Close()
+
+		log.Printf("Generating comparison report for %s and %s...", location1, location2)
+		err = PrintComparisonReport(db, location1, location2)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 	default:
 		printUsage()
 		os.Exit(1)
@@ -70,13 +91,15 @@ func main() {
 
 func printUsage() {
 	fmt.Println("Usage:")
-	fmt.Println("  Parse:  go run . parse [--clear] <parkrun-slug>")
-	fmt.Println("  Report: go run . report <parkrun-slug>")
+	fmt.Println("  Parse:    go run . parse [--clear] <parkrun-slug>")
+	fmt.Println("  Report:   go run . report <parkrun-slug>")
+	fmt.Println("  Compare:  go run . compare <parkrun-slug1> <parkrun-slug2>")
 	fmt.Println("\nFlags for parse command:")
 	fmt.Println("  --clear    Clear existing location data before parsing")
 	fmt.Println("\nExamples:")
 	fmt.Println("  go run . parse oaklandsestatereserve")
 	fmt.Println("  go run . report oaklandsestatereserve")
+	fmt.Println("  go run . compare bushy westerfolds")
 }
 
 func parseAndStoreResults(urlSlug string, clearData bool) {

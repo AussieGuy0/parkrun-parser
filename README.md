@@ -39,7 +39,7 @@ go run . parse bushy
 ```
 
 ### Generate Reports
-To view statistics for a parkrun location:
+To view statistics for a single parkrun location:
 ```bash
 go run . report <location-slug>
 ```
@@ -49,10 +49,21 @@ Example:
 go run . report bushy
 ```
 
+### Compare Locations
+To compare statistics between two parkrun locations:
+```bash
+go run . compare <location-slug1> <location-slug2>
+```
+
+Example:
+```bash
+go run . compare bushy westerfolds
+```
+
 The program will:
 - Create a SQLite database named `parkrun.db` if it doesn't exist
 - When parsing: fetch results starting from the earliest available event
-- When reporting: display various statistics about the parkrun location
+- When reporting: display various statistics about the parkrun location(s)
 
 ## Database Schema
 
