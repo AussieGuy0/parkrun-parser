@@ -27,37 +27,39 @@ A Go program that parses parkrun results and stores them in a SQLite database.
 
 ## Usage
 
+Note: Can also use `go run .` to run the program.
+
 ### Parse Results
 To fetch and store results for a parkrun location:
 ```bash
-go run . parse <location-slug>
+parkrun parse <location-slug>
 ```
 
 Example:
 ```bash
-go run . parse bushy
+parkrun parse bushy
 ```
 
 ### Generate Reports
 To view statistics for a single parkrun location:
 ```bash
-go run . report <location-slug>
+parkrun report <location-slug>
 ```
 
 Example:
 ```bash
-go run . report bushy
+parkrun report bushy
 ```
 
 ### Compare Locations
 To compare statistics between two parkrun locations:
 ```bash
-go run . compare <location-slug1> <location-slug2>
+parkrun compare <location-slug1> <location-slug2>
 ```
 
 Example:
 ```bash
-go run . compare bushy westerfolds
+parkrun compare bushy westerfolds
 ```
 
 The program will:

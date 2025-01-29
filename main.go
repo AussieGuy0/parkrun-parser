@@ -90,16 +90,16 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage:")
-	fmt.Println("  Parse:    go run . parse [--clear] <parkrun-slug>")
-	fmt.Println("  Report:   go run . report <parkrun-slug>")
-	fmt.Println("  Compare:  go run . compare <parkrun-slug1> <parkrun-slug2>")
+	fmt.Println("Commands:")
+	fmt.Println("  Parse:    parkrun parse [--clear] <parkrun-slug>")
+	fmt.Println("  Report:   parkrun report <parkrun-slug>")
+	fmt.Println("  Compare:  parkrun compare <parkrun-slug1> <parkrun-slug2>")
 	fmt.Println("\nFlags for parse command:")
 	fmt.Println("  --clear    Clear existing location data before parsing")
 	fmt.Println("\nExamples:")
-	fmt.Println("  go run . parse oaklandsestatereserve")
-	fmt.Println("  go run . report oaklandsestatereserve")
-	fmt.Println("  go run . compare bushy westerfolds")
+	fmt.Println("  parkrun parse oaklandsestatereserve")
+	fmt.Println("  parkrun report oaklandsestatereserve")
+	fmt.Println("  parkrun compare bushy westerfolds")
 }
 
 func parseAndStoreResults(urlSlug string, clearData bool) {
