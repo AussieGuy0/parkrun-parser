@@ -184,7 +184,7 @@ func parseEventDate(dateText string) (time.Time, error) {
 // timeToSeconds converts a time string (MM:SS or HH:MM:SS) to total seconds
 func timeToSeconds(timeStr string) (int, error) {
 	if timeStr == "" || timeStr == "Unknown" {
-		return 0, nil;
+		return 0, nil
 	}
 
 	parts := strings.Split(timeStr, ":")

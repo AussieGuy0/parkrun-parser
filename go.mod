@@ -1,4 +1,4 @@
-module main
+module parkrun
 
 go 1.21
 

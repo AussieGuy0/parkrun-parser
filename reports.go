@@ -92,7 +92,14 @@ func GetMedianTimesByAgeCategory(db *sql.DB, locationID int) ([]TimeStats, error
 	var stats []TimeStats
 	for category, times := range categoryTimes {
 		sort.Ints(times)
-		median := times[len(times)/2]
+		var median int
+		n := len(times)
+		if n%2 == 0 && n > 0 {
+			// For even number of samples, average the two middle values
+			median = (times[n/2-1] + times[n/2]) / 2
+		} else if n > 0 {
+			median = times[n/2]
+		}
 		stats = append(stats, TimeStats{
 			Category: category,
 			Median:   secondsToTime(median),
@@ -377,13 +384,19 @@ func secondsToTime(seconds int) string {
 
 // parseDateTime parses a date string that might be in different timezone formats
 func parseDateTime(dateStr string) (time.Time, error) {
-	// Try first format with offset
-	t, err := time.Parse("2006-01-02 15:04:05-07:00", dateStr)
+	// Try simple date format first
+	t, err := time.Parse("2006-01-02", dateStr)
 	if err == nil {
 		return t, nil
 	}
 
-	// Try second format with UTC
+	// Try format with offset
+	t, err = time.Parse("2006-01-02 15:04:05-07:00", dateStr)
+	if err == nil {
+		return t, nil
+	}
+
+	// Try format with UTC
 	t, err = time.Parse("2006-01-02 15:04:05+00:00", dateStr)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("error parsing date '%s': %v", dateStr, err)
