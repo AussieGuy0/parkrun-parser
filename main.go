@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+
 func main() {
 	// Define commands
 	parseCmd := flag.NewFlagSet("parse", flag.ExitOnError)
@@ -49,15 +50,11 @@ func main() {
 		}
 
 		urlSlug := os.Args[2]
-		db, err := sql.Open("sqlite3", "./parkrun.db")
-		if err != nil {
-			log.Fatal("Failed to connect to database:", err)
-		}
+		db := connectDB()
 		defer db.Close()
-		log.Printf("Successfully connected to database")
 
 		log.Printf("Generating report for %s...", urlSlug)
-		err = PrintReports(db, urlSlug)
+		err := PrintReports(db, urlSlug)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -71,14 +68,11 @@ func main() {
 		location1 := os.Args[2]
 		location2 := os.Args[3]
 
-		db, err := sql.Open("sqlite3", "./parkrun.db")
-		if err != nil {
-			log.Fatal("Failed to connect to database:", err)
-		}
+		db := connectDB()
 		defer db.Close()
 
 		log.Printf("Generating comparison report for %s and %s...", location1, location2)
-		err = PrintComparisonReport(db, location1, location2)
+		err := PrintComparisonReport(db, location1, location2)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -103,12 +97,8 @@ func printUsage() {
 }
 
 func parseAndStoreResults(urlSlug string, clearData bool) {
-	db, err := sql.Open("sqlite3", "./parkrun.db")
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
+	db := connectDB()
 	defer db.Close()
-	log.Printf("Successfully connected to database")
 
 	CreateTables(db)
 
@@ -123,7 +113,7 @@ func parseAndStoreResults(urlSlug string, clearData bool) {
 
 	// Insert or get location
 	var locationID int
-	err = db.QueryRow(`
+	err := db.QueryRow(`
 		INSERT OR IGNORE INTO locations (slug, country) 
 		VALUES (?, ?) 
 		RETURNING id`, urlSlug, "AUS").Scan(&locationID)
@@ -143,7 +133,7 @@ func parseAndStoreResults(urlSlug string, clearData bool) {
 	eventID := GetNextEventNumber(db, locationID)
 	log.Printf("Starting from event number: %d", eventID)
 
-	waitBetweenRequests := 5 * time.Second
+	waitBetweenRequests := 10 * time.Second
 	rateLimitBackoff := 180 * time.Second
 	consecutiveErrors := 0
 	maxConsecutiveErrors := 3 // Stop after 3 consecutive errors
@@ -196,4 +186,14 @@ func parseAndStoreResults(urlSlug string, clearData bool) {
 	}
 
 	log.Printf("Scraping complete. Processed up to event %d", eventID-1)
+}
+
+
+func connectDB() *sql.DB {
+	db, err := sql.Open("sqlite3", "./parkrun.db")
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+	log.Printf("Successfully connected to database")
+	return db
 }
